@@ -1,14 +1,17 @@
 /**
  * update-sub.mjs — جمع‌آوری، فیلتر و تست کانفیگ‌های رایگان V2Ray
  *
- * - از چند منبع عمومی معروف کانفیگ می‌گیرد
+ * - از چند منبع عمومی معروف کانفیگ می‌گیرد (هر کانفیگ به سورس خودش لینک می‌خورد)
  * - کشور خروجی هر سرور را با geo-ip (و در صورت نبود، برچسب متنی) تشخیص می‌دهد
  * - کانفیگ‌های مرده را با تست TCP حذف می‌کند
  * - اگر هسته Xray در دسترس باشد، کانفیگ‌ها را واقعاً اجرا و کشور خروجی را تأیید می‌کند
- * - خروجی: public/sub/<cc>.txt (base64) + public/sub/all.txt + public/sub/index.json
+ * - برای هر کانفیگ تأییدشده: پینگ (ms) و سرعت دانلود (Mbps) از داخل تانل اندازه‌گیری می‌شود
+ * - خروجی‌ها:
+ *     public/sub/<cc>.txt (base64) + public/sub/all.txt + public/sub/index.json   (اشتراک V2RayNG)
+ *     public/configs/latest.json                                                  (لیست غنی برای رابط کاربری)
  *
  * اجرا: node scripts/update-sub.mjs   (یا bun)
- * متغیرها: XRAY_BIN=/path/to/xray  SKIP_VERIFY=1
+ * متغیرها: XRAY_BIN=/path/to/xray  SKIP_VERIFY=1  SKIP_GEO=1  SKIP_TCP=1  VERIFY_PER_COUNTRY=10
  */
 
 import fs from "node:fs";
@@ -20,30 +23,64 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_DIR = path.join(ROOT, "public", "sub");
+const RICH_DIR = path.join(ROOT, "public", "configs");
 const TMP_DIR = fs.mkdtempSync("/tmp/vsub-");
 fs.mkdirSync(OUT_DIR, { recursive: true });
+fs.mkdirSync(RICH_DIR, { recursive: true });
 
 // ---------- تنظیمات ----------
 const SOURCES = [
-  "https://raw.githubusercontent.com/barry-far/V2ray-Config/main/All_Configs_Sub.txt",
-  "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/sub/sub_merge.txt",
-  "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/sub/sub_merge_base64.txt",
-  "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/server.txt",
-  "https://raw.githubusercontent.com/peasoft/NoMoreWalls/master/list.txt",
-  "https://raw.githubusercontent.com/freefq/free/master/v2",
+  {
+    key: "barryfar",
+    name: "barry-far/V2ray-Config",
+    url: "https://github.com/barry-far/V2ray-Config",
+    raws: ["https://raw.githubusercontent.com/barry-far/V2ray-Config/main/All_Configs_Sub.txt"],
+  },
+  {
+    key: "mahdibland",
+    name: "mahdibland/V2RayAggregator",
+    url: "https://github.com/mahdibland/V2RayAggregator",
+    raws: [
+      "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/sub/sub_merge.txt",
+      "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/sub/sub_merge_base64.txt",
+    ],
+  },
+  {
+    key: "aliilapro",
+    name: "ALIILAPRO/v2rayNG-Config",
+    url: "https://github.com/ALIILAPRO/v2rayNG-Config",
+    raws: ["https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/server.txt"],
+  },
+  {
+    key: "nowalls",
+    name: "peasoft/NoMoreWalls",
+    url: "https://github.com/peasoft/NoMoreWalls",
+    raws: ["https://raw.githubusercontent.com/peasoft/NoMoreWalls/master/list.txt"],
+  },
+  {
+    key: "freefq",
+    name: "freefq/free",
+    url: "https://github.com/freefq/free",
+    raws: ["https://raw.githubusercontent.com/freefq/free/master/v2"],
+  },
 ];
 const EXCLUDED_CC = new Set(["IR", "CN", "KP", "SY"]);
 const CDN_ORG_RE = /cloudflare|akamai|fastly|ddos-guard|gcore|cloudfront/i;
 const PREF_PORTS = new Set([443, 8443, 2053, 2083, 2087, 2096, 5228, 2052, 2082, 2086, 8880]);
 const MAX_HOSTS_RESOLVE = 1500;
-const MAX_GEO_IPS = 1000;
+const MAX_GEO_IPS = 2500;
+const IP_LIT_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 const SKIP_GEO = process.env.SKIP_GEO === "1";
+const SKIP_TCP = process.env.SKIP_TCP === "1";
 const VERIFY_PER_COUNTRY = parseInt(process.env.VERIFY_PER_COUNTRY || "10", 10);
 const PARALLEL_XRAY = 8;
 const XRAY_BASE_PORT = 17000;
-const VERIFY_KEEP = 8;
+const VERIFY_KEEP = 8;   // حداکثر کانفیگ تأییدشده در خروجی غنی هر کشور
+const RICH_BACKUP = 12;  // حداکثر کانفیگ «پشتیبانِ» تست‌نشده در خروجی غنی هر کشور
 const FILE_CAP = 30;
 const ALL_CAP = 400;
+const SPEED_TEST_BYTES = 25 * 1024 * 1024; // 25MB برای رتبه‌بندی درست سرعت
+const SPEED_TEST_SECONDS = 10;
 
 // نام فارسی کشورها + ترتیب اولویت (نزدیک به ایران اول)
 const COUNTRY_ORDER = [
@@ -62,18 +99,27 @@ const CC_FA = {
   HK: "هنگ‌کنگ", KR: "کره جنوبی", AU: "استرالیا", BR: "برزیل", IN: "هند",
   AR: "آرژانتین", MX: "مکزیک", ZA: "آفریقای جنوبی", SA: "عربستان",
   QA: "قطر", KW: "کویت", OM: "عمان", IQ: "عراق",
+  AL: "آلبانی", BZ: "بلیز", CY: "قبرس", VN: "ویتنام", KZ: "قزاقستان",
+  KG: "قرقیزستان", UZ: "ازبکستان", MN: "مغولستان", BE: "بلژیک", TH: "تایلند",
+  LU: "لوکزامبورگ", PA: "پاناما", PH: "فیلیپین", IM: "جزیره من", VG: "جزایر ویرجین",
+  SC: "سیشل", BY: "بلاروس", RS: "صربستان", SI: "اسلوونی", SK: "اسلواکی",
+  HR: "کرواسی", GR: "یونان", PT: "پرتغال", IL: "اسرائیل", TN: "تونس",
+  MA: "مراکش", EG: "مصر", NG: "نیجریه", KE: "کنیا", CL: "شیلی",
+  CO: "کلمبیا", PE: "پرو", EC: "اکوادور", MY: "مالزی", ID: "اندونزی",
+  TW: "تایوان", MO: "ماکائو", PK: "پاکستان", BD: "بنگلادش", LK: "سری‌لانکا",
+  NP: "نپال", AF: "افغانستان", TJ: "تاجیکستان", TM: "ترکمنستان",
 };
 
 // برچسب‌های متنی برای حالتی که geo در دسترس نیست
 const REMARK_CC = {
   de: "de|germany|german|frankfurt|berlin|dusseldorf|düsseldorf|münchen|munich|آلمان|فرانکفورت",
-  tr: "tr|turkey|turkish|türkiye|istanbul|istanbul|ankara|ترکیه|استانبول|استنبول",
+  tr: "tr|turkey|turkish|türkiye|istanbul|ankara|ترکیه|استانبول|استنبول",
   nl: "nl|netherlands|dutch|amsterdam|هلند|آمستردام",
   gb: "gb|uk|united kingdom|britain|england|london|انگلیس|بریتانیا|لندن",
   us: "us|usa|united states|america|آمریکا|امریکا",
   fi: "fi|finland|فنلاند",
   se: "se|sweden|سوئد",
-  ch: "ch|swiss|switzerland|سوئیس|سوئیس",
+  ch: "ch|swiss|switzerland|سوئیس",
   at: "at|austria|اتریش",
   fr: "fr|france|فرانسه",
   ca: "ca|canada|کانادا",
@@ -217,17 +263,19 @@ function remarkToCc(name) {
 
 // ---------- مرحله ۱: دریافت منابع ----------
 async function fetchSources() {
-  const texts = [];
+  const texts = []; // {key, text}
   await Promise.all(
-    SOURCES.map(async (url) => {
-      try {
-        const res = await fetch(url, { signal: AbortSignal.timeout(40000) });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const text = await res.text();
-        if (text.length > 300) texts.push(text);
-        console.log(`source ok: ${url.split("/").slice(3).join("/")} (${text.length} B)`);
-      } catch (e) {
-        console.log(`source FAIL: ${url} -> ${e.message}`);
+    SOURCES.map(async (src) => {
+      for (const url of src.raws) {
+        try {
+          const res = await fetch(url, { signal: AbortSignal.timeout(40000) });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const text = await res.text();
+          if (text.length > 300) texts.push({ key: src.key, text });
+          console.log(`source ok: ${src.key} <- ${url.split("/").slice(3).join("/")} (${text.length} B)`);
+        } catch (e) {
+          console.log(`source FAIL: ${src.key} ${url} -> ${e.message}`);
+        }
       }
     })
   );
@@ -236,36 +284,23 @@ async function fetchSources() {
 }
 
 const URI_RE = /^(vmess|vless|trojan|ss):\/\//i;
-function extractUris(text, uris) {
+function extractUris(text, uriSrc, key) {
   for (const line of text.split(/\r?\n/)) {
     const t = line.trim();
     if (!t) continue;
     if (URI_RE.test(t)) {
-      uris.add(t);
+      if (!uriSrc.has(t)) uriSrc.set(t, key);
       continue;
     }
     const dec = b64d(t);
-    if (dec && URI_RE.test(dec.trim())) uris.add(dec.trim());
-  }
-}
-function extractAll(texts, uris) {
-  for (const t of texts) extractUris(t, uris);
-  if (uris.size < 10) {
-    for (const t of texts) {
-      const whole = b64d(t.replace(/\s+/g, ""));
-      if (whole)
-        for (const line of whole.split(/\r?\n/)) {
-          const tt = line.trim();
-          if (URI_RE.test(tt)) uris.add(tt);
-        }
-    }
+    if (dec && URI_RE.test(dec.trim()) && !uriSrc.has(dec.trim())) uriSrc.set(dec.trim(), key);
   }
 }
 
-function parseAll(uris) {
+function parseAll(uriSrc) {
   const cands = [];
   const seen = new Set();
-  for (const uri of uris) {
+  for (const [uri, key] of uriSrc) {
     const low = uri.slice(0, 8).toLowerCase();
     let c = null;
     if (low.startsWith("vmess://")) c = parseVmess(uri);
@@ -273,9 +308,10 @@ function parseAll(uris) {
     else if (low.startsWith("trojan://")) c = parseUserinfo(uri, "trojan");
     else if (low.startsWith("ss://")) c = parseSs(uri);
     if (!c || !c.host || !c.port || c.port > 65535) continue;
-    const key = `${c.proto}|${c.host.toLowerCase()}|${c.port}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const key0 = `${c.proto}|${c.host.toLowerCase()}|${c.port}`;
+    if (seen.has(key0)) continue;
+    seen.add(key0);
+    c.src = key;
     cands.push(c);
   }
   return cands;
@@ -284,26 +320,39 @@ function parseAll(uris) {
 // ---------- مرحله ۲: DNS + geo ----------
 async function resolveHosts(cands) {
   const resolver = new Resolver();
-  const deFirst = cands.filter((c) => remarkToCc(c.name));
+  const ipToHosts = new Map();
+  // IPهای خام مستقیماً وارد استخر geo می‌شوند (بدون DNS)
+  for (const c of cands) {
+    if (IP_LIT_RE.test(c.host)) {
+      const k = c.host.toLowerCase();
+      if (!ipToHosts.has(k)) ipToHosts.set(k, [k]);
+    }
+  }
+  const remarkFirst = cands.filter((c) => remarkToCc(c.name));
   const others = cands.filter((c) => !remarkToCc(c.name));
   const hosts = [];
   const seen = new Set();
-  for (const c of [...deFirst, ...others]) {
+  for (const c of [...remarkFirst, ...others]) {
+    if (IP_LIT_RE.test(c.host)) continue;
     const k = c.host.toLowerCase();
     if (seen.has(k)) continue;
     seen.add(k);
     hosts.push(c.host);
     if (hosts.length >= MAX_HOSTS_RESOLVE) break;
   }
-  const ipToHosts = new Map();
   let idx = 0;
   const CONC = 60;
   const worker = async () => {
     while (idx < hosts.length) {
       const host = hosts[idx++];
       try {
+        // نکته: با {ttl:...} برخی ران‌تایم‌ها آبجکت {address,ttl} می‌دهند — نرمال می‌کنیم
         const addrs = await resolver.resolve4(host, { ttl: 300 });
-        for (const a of addrs.slice(0, 3)) {
+        const ips = addrs
+          .map((a) => (typeof a === "string" ? a : a && a.address))
+          .filter(Boolean)
+          .slice(0, 3);
+        for (const a of ips) {
           if (!ipToHosts.has(a)) ipToHosts.set(a, []);
           ipToHosts.get(a).push(host.toLowerCase());
         }
@@ -365,7 +414,8 @@ async function geoBatch(ipToHosts) {
 async function tcpAlive(cands) {
   const alive = [];
   let idx = 0;
-  const CONC = 50;
+  const CONC = 100;
+  const TCP_TIMEOUT = 2000;
   const tcpCheck = (host, port) =>
     new Promise((resolve) => {
       let settled = false;
@@ -383,14 +433,18 @@ async function tcpAlive(cands) {
       } catch {
         return resolve(false);
       }
-      s.setTimeout(3000, () => done(false));
+      s.setTimeout(TCP_TIMEOUT, () => done(false));
       s.once("connect", () => done(true));
       s.once("error", () => done(false));
     });
+  const total = cands.length;
+  let doneCount = 0;
   const worker = async () => {
     while (idx < cands.length) {
       const c = cands[idx++];
       if (await tcpCheck(c.host, c.port)) alive.push(c);
+      doneCount++;
+      if (doneCount % 500 === 0) console.log(`tcp progress: ${doneCount}/${total} (alive=${alive.length})`);
     }
   };
   await Promise.all(Array.from({ length: CONC }, worker));
@@ -518,7 +572,77 @@ function buildOutbound(c) {
   return null;
 }
 
-// ---------- مرحله ۴: تست واقعی با Xray ----------
+// ---------- مرحله ۴: تست واقعی با Xray (خروجی + پینگ + سرعت) ----------
+function curlCmd(args, timeoutMs) {
+  return new Promise((resolve) => {
+    execFile("curl", args, { timeout: timeoutMs }, (err, stdout) => {
+      if (err || !stdout) return resolve(null);
+      resolve(stdout.toString());
+    });
+  });
+}
+
+async function exitInfo(port) {
+  const out = await curlCmd(
+    [
+      "-sS", "--max-time", "8",
+      "--socks5-hostname", `127.0.0.1:${port}`,
+      "http://ip-api.com/json/?fields=status,countryCode,org,as,query",
+    ],
+    10000
+  );
+  if (!out) return null;
+  try {
+    const j = JSON.parse(out);
+    if (!j.countryCode) return null;
+    return { cc: j.countryCode, org: String(j.org || j.as || "") };
+  } catch {
+    return null;
+  }
+}
+
+async function pingThroughSocks(port) {
+  let best = null;
+  for (let i = 0; i < 2; i++) {
+    const out = await curlCmd(
+      [
+        "-sS", "-o", "/dev/null",
+        "-w", "%{time_total}",
+        "--max-time", "6",
+        "--socks5-hostname", `127.0.0.1:${port}`,
+        "http://www.gstatic.com/generate_204",
+      ],
+      8000
+    );
+    if (out) {
+      const t = parseFloat(out);
+      if (!Number.isNaN(t) && t > 0) {
+        const ms = Math.round(t * 1000);
+        if (best === null || ms < best) best = ms;
+        if (best <= 400) break; // سریع بود، ادامه نده
+      }
+    }
+  }
+  return best;
+}
+
+async function speedThroughSocks(port) {
+  const out = await curlCmd(
+    [
+      "-sS", "-o", "/dev/null",
+      "-w", "%{speed_download}",
+      "--max-time", String(SPEED_TEST_SECONDS),
+      "--socks5-hostname", `127.0.0.1:${port}`,
+      `https://speed.cloudflare.com/__down?bytes=${SPEED_TEST_BYTES}`,
+    ],
+    SPEED_TEST_SECONDS * 1000 + 2000
+  );
+  if (!out) return null;
+  const bps = parseFloat(out);
+  if (Number.isNaN(bps) || bps <= 0) return null;
+  return Math.round((bps * 8) / 1e6 * 10) / 10; // Mbps با یک رقم اعشار
+}
+
 function startXray(cfgFile) {
   return execFile(XRAY_BIN, ["run", "-c", cfgFile], { timeout: 15000 }, () => {});
 }
@@ -528,9 +652,9 @@ async function verifyOne(c, slot, expectedCc) {
   try {
     ob = buildOutbound(c);
   } catch {
-    return false;
+    return null;
   }
-  if (!ob) return false;
+  if (!ob) return null;
   const cfg = {
     log: { loglevel: "warning" },
     inbounds: [{ listen: "127.0.0.1", port: XRAY_BASE_PORT + slot, protocol: "socks", settings: { auth: "noauth", udp: false } }],
@@ -541,41 +665,27 @@ async function verifyOne(c, slot, expectedCc) {
   const proc = startXray(cfgFile);
   const port = XRAY_BASE_PORT + slot;
   await new Promise((r) => setTimeout(r, 1100));
-  const cc = await curlThroughSocks(port);
+  const exit = await exitInfo(port);
+  let detail = null;
+  if (exit) {
+    const ping = await pingThroughSocks(port);
+    if (ping !== null) {
+      const speed = await speedThroughSocks(port);
+      detail = { cc: exit.cc, org: exit.org, ping, speed };
+    }
+  }
   try {
     proc.kill("SIGKILL");
   } catch {}
-  if (!cc) return false;
-  if (expectedCc) return cc === expectedCc;
-  return !["IR", "CN", "KP", "SY"].includes(cc);
-}
-
-async function curlThroughSocks(port) {
-  return new Promise((resolve) => {
-    execFile(
-      "curl",
-      [
-        "-sS", "--max-time", "6",
-        "--socks5-hostname", `127.0.0.1:${port}`,
-        "http://ip-api.com/json/?fields=countryCode",
-      ],
-      { timeout: 8000 },
-      (err, stdout) => {
-        if (err || !stdout) return resolve(null);
-        try {
-          const j = JSON.parse(stdout);
-          resolve(j.countryCode || null);
-        } catch {
-          resolve(null);
-        }
-      }
-    );
-  });
+  if (!detail) return null;
+  if (expectedCc && detail.cc !== expectedCc) return null;
+  if (!expectedCc && EXCLUDED_CC.has(detail.cc)) return null;
+  return detail;
 }
 
 async function verifyBatch(list, expectedCc) {
-  const verified = new Set();
-  if (list.length === 0) return verified;
+  const results = new Map(); // raw -> detail
+  if (list.length === 0) return results;
   let idx = 0;
   const N = Math.min(PARALLEL_XRAY, list.length);
   const freeSlots = [...Array(N).keys()];
@@ -593,8 +703,8 @@ async function verifyBatch(list, expectedCc) {
       const c = list[idx++];
       const slot = await takeSlot();
       try {
-        const ok = await verifyOne(c, slot, expectedCc);
-        if (ok) verified.add(c.raw);
+        const detail = await verifyOne(c, slot, expectedCc);
+        if (detail) results.set(c.raw, detail);
       } catch {
         /* نادیده */
       }
@@ -602,7 +712,7 @@ async function verifyBatch(list, expectedCc) {
     }
   };
   await Promise.all(Array.from({ length: N }, worker));
-  return verified;
+  return results;
 }
 
 // ---------- انتخاب ----------
@@ -629,18 +739,32 @@ function pickForVerify(pool, n) {
   return chosen;
 }
 
-// ---------- اجرای اصلی ----------
-const XRAY_BIN = process.env.XRAY_BIN || path.join(TMP_DIR, "xray", "xray");
+// ---------- اجرای اصلی (resume‌پذیر مرحله‌به‌مرحله) ----------
+const STATE_DIR = process.env.STATE_DIR || "/tmp/vsub-run";
+const VERIFY_DIR = path.join(STATE_DIR, "verify");
+fs.mkdirSync(VERIFY_DIR, { recursive: true });
+const STATE_FILE = path.join(STATE_DIR, "state.json");
+const TCP_FILE = path.join(STATE_DIR, "tcp.json");
+const DONE_FILE = path.join(STATE_DIR, "done.flag");
+const jread = (f) => JSON.parse(fs.readFileSync(f, "utf8"));
+const jwrite = (f, obj) => fs.writeFileSync(f, JSON.stringify(obj));
+
+const XRAY_BIN =
+  process.env.XRAY_BIN && fs.existsSync(process.env.XRAY_BIN)
+    ? process.env.XRAY_BIN
+    : path.join(STATE_DIR, "xray", "xray");
 async function ensureXray() {
-  if (fs.existsSync(XRAY_BIN) && fs.existsSync(path.join(path.dirname(XRAY_BIN), "geoip.dat"))) return true;
+  if (fs.existsSync(XRAY_BIN)) return true;
   if (process.env.SKIP_VERIFY) return false;
   try {
-    const zipPath = path.join(TMP_DIR, "xray.zip");
+    const zipPath = path.join(STATE_DIR, "xray.zip");
     const res = await fetch("https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip", { signal: AbortSignal.timeout(180000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf = Buffer.from(await res.arrayBuffer());
     fs.writeFileSync(zipPath, buf);
-    execPythonUnzip(zipPath, path.join(TMP_DIR, "xray"));
+    const destDir = path.join(STATE_DIR, "xray");
+    fs.mkdirSync(destDir, { recursive: true });
+    execFileSync("python3", ["-m", "zipfile", "-e", zipPath, destDir], { timeout: 120000 });
     fs.chmodSync(XRAY_BIN, 0o755);
     return true;
   } catch (e) {
@@ -648,39 +772,45 @@ async function ensureXray() {
     return false;
   }
 }
-function execPythonUnzip(zipPath, destDir) {
-  fs.mkdirSync(destDir, { recursive: true });
-  execFileSync("python3", ["-m", "zipfile", "-e", zipPath, destDir], { timeout: 120000 });
-}
 
 async function main() {
-  console.log("== 1/5 fetching sources ==");
-  const texts = await fetchSources();
-  const uris = new Set();
-  extractAll(texts, uris);
-  console.log(`unique URIs: ${uris.size}`);
+  let cands, hostToGeo;
 
-  console.log("== 2/5 parsing ==");
-  const cands = parseAll(uris);
-  console.log(`parsed candidates: ${cands.length}`);
-
-  console.log("== 3/5 dns + geo ==");
-  let hostToGeo = new Map();
-  if (!SKIP_GEO) {
-    const ipToHosts = await resolveHosts(cands);
-    console.log(`unique IPs resolved: ${ipToHosts.size}`);
-    const { geo, healthy } = await geoBatch(ipToHosts);
-    console.log(`geo entries: ${geo.size} (healthy=${healthy})`);
-    hostToGeo = new Map();
-    for (const [ip, g] of geo)
-      for (const h of ipToHosts.get(ip) || [])
-        if (!hostToGeo.has(h)) hostToGeo.set(h, g);
+  if (fs.existsSync(STATE_FILE) && process.env.FRESH !== "1") {
+    console.log("== resume: state loaded ==");
+    const st = jread(STATE_FILE);
+    cands = st.cands;
+    hostToGeo = new Map(st.hostToGeo);
   } else {
-    console.log("geo skipped (SKIP_GEO=1) — remark grouping only");
+    console.log("== 1/5 fetching sources ==");
+    const texts = await fetchSources();
+    const uriSrc = new Map();
+    for (const { key, text } of texts) extractUris(text, uriSrc, key);
+    console.log(`unique URIs: ${uriSrc.size}`);
+
+    console.log("== 2/5 parsing ==");
+    cands = parseAll(uriSrc);
+    console.log(`parsed candidates: ${cands.length}`);
+
+    console.log("== 3/5 dns + geo ==");
+    hostToGeo = new Map();
+    if (!SKIP_GEO) {
+      const ipToHosts = await resolveHosts(cands);
+      console.log(`unique IPs resolved: ${ipToHosts.size}`);
+      const { geo, healthy } = await geoBatch(ipToHosts);
+      console.log(`geo entries: ${geo.size} (healthy=${healthy})`);
+      for (const [ip, g] of geo)
+        for (const h of ipToHosts.get(ip) || [])
+          if (!hostToGeo.has(h)) hostToGeo.set(h, g);
+    } else {
+      console.log("geo skipped (SKIP_GEO=1) — remark grouping only");
+    }
+    jwrite(STATE_FILE, { cands, hostToGeo: [...hostToGeo.entries()] });
+    console.log("state saved to disk");
   }
 
   // گروه‌بندی: geo دقیق > برچسب متنی > CDN > حذف
-  const groups = new Map(); // cc -> cands
+  const groups = new Map();
   const cdnPool = [];
   for (const c of cands) {
     const g = hostToGeo.get(c.host.toLowerCase());
@@ -702,29 +832,140 @@ async function main() {
   console.log(`cdn pool: ${cdnPool.length}`);
 
   console.log("== 4/5 tcp filter ==");
-  const SKIP_TCP = process.env.SKIP_TCP === "1";
-  const aliveGroups = new Map();
-  for (const [cc, pool] of groups) {
-    const alive = SKIP_TCP ? pool : await tcpAlive(pool);
-    if (alive.length) aliveGroups.set(cc, alive);
+  let aliveByCc, cdnAlive;
+  if (fs.existsSync(TCP_FILE)) {
+    const t = jread(TCP_FILE);
+    aliveByCc = new Map();
+    for (const [cc, raws] of Object.entries(t.aliveByCc)) {
+      const byRaw = new Map((groups.get(cc) || []).map((c) => [c.raw, c]));
+      const list = raws.map((r) => byRaw.get(r)).filter(Boolean);
+      if (list.length) aliveByCc.set(cc, list);
+    }
+    const byRawCdn = new Map(cdnPool.map((c) => [c.raw, c]));
+    cdnAlive = (t.cdnAlive || []).map((r) => byRawCdn.get(r)).filter(Boolean);
+    console.log("tcp filter loaded from disk");
+  } else {
+    aliveByCc = new Map();
+    for (const [cc, pool] of groups) {
+      const alive = SKIP_TCP ? pool : await tcpAlive(pool);
+      if (alive.length) aliveByCc.set(cc, alive);
+    }
+    cdnAlive = SKIP_TCP ? cdnPool : await tcpAlive(cdnPool);
+    jwrite(TCP_FILE, {
+      aliveByCc: Object.fromEntries([...aliveByCc.entries()].map(([cc, a]) => [cc, a.map((c) => c.raw)])),
+      cdnAlive: cdnAlive.map((c) => c.raw),
+    });
+    console.log("tcp filter saved to disk");
   }
-  const cdnAlive = SKIP_TCP ? cdnPool : await tcpAlive(cdnPool);
-  console.log(`alive groups: ${[...aliveGroups.entries()].map(([cc, a]) => `${cc}:${a.length}`).join(", ")}`);
+  console.log(`alive groups: ${[...aliveByCc.entries()].map(([cc, a]) => `${cc}:${a.length}`).join(", ")}`);
   console.log(`cdn alive: ${cdnAlive.length}`);
 
   console.log("== 5/5 xray verify ==");
   const hasXray = await ensureXray();
+  const candByRaw = new Map(cands.map((c) => [c.raw, c]));
+
+  const orderedCc = [...aliveByCc.keys()].sort((a, b) => {
+    const ia = COUNTRY_ORDER.indexOf(a);
+    const ib = COUNTRY_ORDER.indexOf(b);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
+  const pending = orderedCc.map((cc) => ({ key: cc, list: aliveByCc.get(cc), expectedCc: cc }));
+  if (cdnAlive.length) pending.push({ key: "CDN", list: cdnAlive, expectedCc: null });
+
+  const verifyChunk = async ({ key, list, expectedCc }) => {
+    const f = path.join(VERIFY_DIR, `${key}.json`);
+    if (fs.existsSync(f)) return jread(f);
+    const n = key === "CDN" ? VERIFY_PER_COUNTRY * 2 : VERIFY_PER_COUNTRY;
+    const pool = pickForVerify(list, n);
+    const results = {};
+    if (hasXray && pool.length) {
+      const m = await verifyBatch(pool, expectedCc);
+      for (const [raw, d] of m) results[raw] = d;
+    }
+    const chunk = { key, pool: pool.map((c) => c.raw), results };
+    jwrite(f, chunk);
+    console.log(`verify ${key}: ${Object.keys(results).length}/${pool.length} verified — saved`);
+    return chunk;
+  };
+  for (const item of pending) await verifyChunk(item);
+
+  // ---------- ساخت خروجی‌ها ----------
   const index = { generated: new Date().toISOString(), countries: [], cdn: null };
   const allLines = [];
-  const writeIndex = () =>
-    fs.writeFileSync(path.join(OUT_DIR, "index.json"), JSON.stringify(index, null, 2));
-  const writeCountry = (cc, list, verified) => {
+  const richByCc = new Map();
+  const pushRich = (entry) => {
+    const cc = entry.country;
+    if (!richByCc.has(cc)) richByCc.set(cc, []);
+    richByCc.get(cc).push(entry);
+  };
+  const byPing = (a, b) => (a[1].ping || 99999) - (b[1].ping || 99999);
+
+  for (const item of pending) {
+    const { key, list, expectedCc } = item;
+    const chunk = jread(path.join(VERIFY_DIR, `${key}.json`));
+    const verifiedMap = new Map(Object.entries(chunk.results));
+    if (key === "CDN") {
+      const lines = [];
+      const seenRaw = new Set();
+      for (const raw of verifiedMap.keys()) {
+        if (!seenRaw.has(raw)) {
+          seenRaw.add(raw);
+          lines.push(raw);
+        }
+      }
+      for (const c of list) {
+        if (lines.length >= 60) break;
+        if (!seenRaw.has(c.raw)) {
+          seenRaw.add(c.raw);
+          lines.push(c.raw);
+        }
+      }
+      if (lines.length) {
+        fs.writeFileSync(
+          path.join(OUT_DIR, "cdn.txt"),
+          Buffer.from(lines.join("\n"), "utf8").toString("base64") + "\n"
+        );
+        index.cdn = { name: "بین‌الملل (CDN)", flag: "🌐", count: lines.length, file: "cdn.txt" };
+      }
+      // تأییدشده‌های CDN به کشور واقعی خروجی می‌روند
+      const verifiedByCc = new Map();
+      for (const [raw, d] of verifiedMap) {
+        const c = candByRaw.get(raw);
+        if (!c || EXCLUDED_CC.has(d.cc)) continue;
+        if (!verifiedByCc.has(d.cc)) verifiedByCc.set(d.cc, []);
+        verifiedByCc.get(d.cc).push([c, d]);
+      }
+      for (const [cc, pairs] of verifiedByCc) {
+        pairs.sort(byPing);
+        for (const [c, d] of pairs.slice(0, 4)) {
+          pushRich({
+            uri: c.raw, proto: c.proto, net: c.net || "tcp", security: c.security || "none",
+            country: cc, org: d.org || "", ping: d.ping, speed: d.speed,
+            source: c.src || "", name: c.name || "", host: c.host, port: c.port, verified: true,
+          });
+        }
+      }
+      let cdnBackup = 0;
+      const sortedCdn = [...list].sort((a, b) => score(b) - score(a));
+      for (const c of sortedCdn) {
+        if (cdnBackup >= 8) break;
+        if (verifiedMap.has(c.raw)) continue;
+        pushRich({
+          uri: c.raw, proto: c.proto, net: c.net || "tcp", security: c.security || "none",
+          country: "CDN", org: "", ping: null, speed: null,
+          source: c.src || "", name: c.name || "", host: c.host, port: c.port, verified: false,
+        });
+        cdnBackup++;
+      }
+      continue;
+    }
+    // کشور عادی
     const lines = [];
     const seenRaw = new Set();
-    for (const c of verified) {
-      if (!seenRaw.has(c.raw)) {
-        seenRaw.add(c.raw);
-        lines.push(c.raw);
+    for (const raw of verifiedMap.keys()) {
+      if (!seenRaw.has(raw)) {
+        seenRaw.add(raw);
+        lines.push(raw);
         if (lines.length >= VERIFY_KEEP) break;
       }
     }
@@ -735,64 +976,82 @@ async function main() {
         lines.push(c.raw);
       }
     }
-    if (lines.length === 0) return;
-    const file = `${cc.toLowerCase()}.txt`;
-    fs.writeFileSync(path.join(OUT_DIR, file), Buffer.from(lines.join("\n"), "utf8").toString("base64") + "\n");
-    index.countries.push({ cc, name: CC_FA[cc] || cc, flag: ccFlag(cc), count: lines.length, verified: Math.min(verified.length, VERIFY_KEEP), file });
-    for (const l of lines) if (allLines.length < ALL_CAP) allLines.push(l);
-    writeIndex(); // ذخیره تدریجی برای مقاومت در برابر قطع
-  };
-  // ترتیب: اولویت نزدیکی به ایران، سپس بقیه
-  const ordered = [...aliveGroups.entries()].sort((a, b) => {
-    const ia = COUNTRY_ORDER.indexOf(a[0]);
-    const ib = COUNTRY_ORDER.indexOf(b[0]);
-    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
-  });
-  for (const [cc, alive] of ordered) {
-    const pool = pickForVerify(alive, VERIFY_PER_COUNTRY);
-    let verifiedSet = new Set();
-    if (hasXray) verifiedSet = await verifyBatch(pool, cc);
-    const verified = alive.filter((c) => verifiedSet.has(c.raw));
-    console.log(`verify ${cc}: ${verified.length} verified of ${pool.length} tested`);
-    writeCountry(cc, alive, verified);
-  }
-  const cdnVerified = new Set();
-  if (hasXray && cdnAlive.length) {
-    const pool = pickForVerify(cdnAlive, VERIFY_PER_COUNTRY * 2);
-    const s = await verifyBatch(pool, null);
-    for (const raw of s) cdnVerified.add(raw);
-  }
-  if (cdnAlive.length) {
-    const lines = [];
-    const seenRaw = new Set();
-    // اول کانفیگ‌های تأییدشده با Xray، سپس بقیه
-    for (const c of cdnAlive) {
-      if (lines.length >= 60) break;
-      if (cdnVerified.has(c.raw) && !seenRaw.has(c.raw)) {
-        seenRaw.add(c.raw);
-        lines.push(c.raw);
-      }
+    if (lines.length) {
+      const file = `${key.toLowerCase()}.txt`;
+      fs.writeFileSync(path.join(OUT_DIR, file), Buffer.from(lines.join("\n"), "utf8").toString("base64") + "\n");
+      index.countries.push({ cc: key, name: CC_FA[key] || key, flag: ccFlag(key), count: lines.length, verified: Math.min(verifiedMap.size, VERIFY_KEEP), file });
+      for (const l of lines) if (allLines.length < ALL_CAP) allLines.push(l);
     }
-    for (const c of cdnAlive) {
-      if (lines.length >= 60) break;
-      if (!seenRaw.has(c.raw)) {
-        seenRaw.add(c.raw);
-        lines.push(c.raw);
-      }
+    const verifiedSorted = [...verifiedMap.entries()].sort(byPing).slice(0, VERIFY_KEEP);
+    for (const [raw, d] of verifiedSorted) {
+      const c = candByRaw.get(raw);
+      if (!c) continue;
+      pushRich({
+        uri: c.raw, proto: c.proto, net: c.net || "tcp", security: c.security || "none",
+        country: d.cc || key, org: d.org || "", ping: d.ping, speed: d.speed,
+        source: c.src || "", name: c.name || "", host: c.host, port: c.port, verified: true,
+      });
     }
-    fs.writeFileSync(
-      path.join(OUT_DIR, "cdn.txt"),
-      Buffer.from(lines.join("\n"), "utf8").toString("base64") + "\n"
-    );
-    index.cdn = { name: "بین‌الملل (CDN)", flag: "🌐", count: lines.length, file: "cdn.txt" };
-    writeIndex();
+    const poolRaws = new Set(chunk.pool);
+    let backup = 0;
+    const sorted = [...list].sort((a, b) => score(b) - score(a));
+    for (const c of sorted) {
+      if (backup >= RICH_BACKUP) break;
+      if (poolRaws.has(c.raw) || verifiedMap.has(c.raw)) continue;
+      const g = hostToGeo.get(c.host.toLowerCase());
+      pushRich({
+        uri: c.raw, proto: c.proto, net: c.net || "tcp", security: c.security || "none",
+        country: key, org: (g && g.org) || "", ping: null, speed: null,
+        source: c.src || "", name: c.name || "", host: c.host, port: c.port, verified: false,
+      });
+      backup++;
+    }
   }
+
   fs.writeFileSync(
     path.join(OUT_DIR, "all.txt"),
     Buffer.from(allLines.join("\n"), "utf8").toString("base64") + "\n"
   );
-  writeIndex();
-  console.log(`DONE: ${index.countries.length} countries, all=${allLines.length}`);
+  fs.writeFileSync(path.join(OUT_DIR, "index.json"), JSON.stringify(index, null, 2));
+
+  const countryEntries = [...richByCc.entries()]
+    .filter(([cc]) => cc !== "CDN")
+    .sort((a, b) => {
+      const ia = COUNTRY_ORDER.indexOf(a[0]);
+      const ib = COUNTRY_ORDER.indexOf(b[0]);
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    })
+    .map(([cc, list]) => ({
+      cc,
+      name: CC_FA[cc] || cc,
+      flag: ccFlag(cc),
+      count: list.length,
+      verifiedCount: list.filter((x) => x.verified).length,
+      file: `${cc.toLowerCase()}.txt`,
+    }));
+  if (richByCc.has("CDN")) {
+    const list = richByCc.get("CDN");
+    countryEntries.push({ cc: "CDN", name: "بین‌الملل (CDN)", flag: "🌐", count: list.length, verifiedCount: 0, file: "cdn.txt" });
+  }
+  const latest = {
+    generated: new Date().toISOString(),
+    sources: SOURCES.map((s) => ({ key: s.key, name: s.name, url: s.url })),
+    countries: countryEntries,
+    configs: [...richByCc.entries()]
+      .sort((a, b) => {
+        const ia = COUNTRY_ORDER.indexOf(a[0]) === -1 ? 999 : COUNTRY_ORDER.indexOf(a[0]);
+        const ib = COUNTRY_ORDER.indexOf(b[0]) === -1 ? 999 : COUNTRY_ORDER.indexOf(b[0]);
+        return ia - ib;
+      })
+      .flatMap(([, list]) => list),
+  };
+  fs.writeFileSync(path.join(RICH_DIR, "latest.json"), JSON.stringify(latest));
+
+  const allDone = pending.every((item) => fs.existsSync(path.join(VERIFY_DIR, `${item.key}.json`)));
+  console.log(
+    `DONE: ${index.countries.length} countries, all=${allLines.length}, rich=${latest.configs.length}, verified=${latest.configs.filter((c) => c.verified).length}, complete=${allDone}`
+  );
+  if (allDone) jwrite(DONE_FILE, { at: Date.now() });
 }
 
 main().catch((e) => {

@@ -4,7 +4,7 @@ const NAV_LINKS = [
   { href: "#portal", label: "درگاه یک‌کلیکی" },
   { href: "#advisor", label: "مشاور هوشمند" },
   { href: "#tools", label: "ابزارها" },
-  { href: "#configs", label: "کانفیگ‌های رایگان" },
+  { href: "#configs", label: "کانفیگ‌های تست‌شده" },
   { href: "#guides", label: "راهنماهای کامل" },
   { href: "#dns", label: "DNS ضدتحریم" },
   { href: "#safety", label: "امنیت" },
