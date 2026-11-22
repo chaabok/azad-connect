@@ -63,6 +63,31 @@ const SOURCES = [
     url: "https://github.com/freefq/free",
     raws: ["https://raw.githubusercontent.com/freefq/free/master/v2"],
   },
+  // ---------- منابع باکیفیت‌تر (تست سلامت/دسترس‌پذیری داخلی دارند) ----------
+  {
+    key: "ermaozi",
+    name: "ermaozi/get_subscribe",
+    url: "https://github.com/ermaozi/get_subscribe",
+    raws: ["https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/v2ray.txt"],
+  },
+  {
+    key: "proxypool",
+    name: "snakem982/proxypool",
+    url: "https://github.com/snakem982/proxypool",
+    raws: ["https://raw.githubusercontent.com/snakem982/proxypool/main/source/v2ray-2.txt"],
+  },
+  {
+    key: "matin",
+    name: "MatinGhanbari/v2ray-configs",
+    url: "https://github.com/MatinGhanbari/v2ray-configs",
+    raws: ["https://raw.githubusercontent.com/MatinGhanbari/v2ray-configs/main/subscriptions/v2ray/all_sub.txt"],
+  },
+  {
+    key: "aiboboxx",
+    name: "aiboboxx/v2rayfree",
+    url: "https://github.com/aiboboxx/v2rayfree",
+    raws: ["https://raw.githubusercontent.com/aiboboxx/v2rayfree/main/v{today}"],
+  },
 ];
 const EXCLUDED_CC = new Set(["IR", "CN", "KP", "SY"]);
 const CDN_ORG_RE = /cloudflare|akamai|fastly|ddos-guard|gcore|cloudfront/i;
@@ -75,8 +100,10 @@ const SKIP_TCP = process.env.SKIP_TCP === "1";
 const VERIFY_PER_COUNTRY = parseInt(process.env.VERIFY_PER_COUNTRY || "10", 10);
 const PARALLEL_XRAY = 8;
 const XRAY_BASE_PORT = 17000;
-const VERIFY_KEEP = 8;   // حداکثر کانفیگ تأییدشده در خروجی غنی هر کشور
-const RICH_BACKUP = 12;  // حداکثر کانفیگ «پشتیبانِ» تست‌نشده در خروجی غنی هر کشور
+const VERIFY_KEEP = 12;  // حداکثر کانفیگ تأییدشده در خروجی غنی هر کشور
+const RICH_BACKUP = 6;   // حداکثر کانفیگ «پشتیبانِ» تست‌نشده در خروجی غنی هر کشور
+const UNVERIF_FILL = 6;  // حداکثر پشتیبان تست‌نشده در فایل اشتراک هر کشور (اگر تأییدشده کم بود)
+const QUALITY_SRC = new Set(["ermaozi", "proxypool", "matin", "aiboboxx"]); // منابع با تست سلامت داخلی
 const FILE_CAP = 30;
 const ALL_CAP = 400;
 const SPEED_TEST_BYTES = 25 * 1024 * 1024; // 25MB برای رتبه‌بندی درست سرعت
@@ -266,7 +293,9 @@ async function fetchSources() {
   const texts = []; // {key, text}
   await Promise.all(
     SOURCES.map(async (src) => {
-      for (const url of src.raws) {
+      for (const rawUrl of src.raws) {
+        // {today} = تاریخ روز به شکل YYYYMMDD (برای فایل‌های روزانه مثل aiboboxx)
+        const url = rawUrl.replaceAll("{today}", new Date().toISOString().slice(0, 10).replaceAll("-", ""));
         try {
           const res = await fetch(url, { signal: AbortSignal.timeout(40000) });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -722,6 +751,7 @@ function score(c) {
   if (c.security === "reality") s += 3;
   if (c.security === "tls") s += 2;
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(c.host)) s += 1; // IP مستقیم
+  if (c.src && QUALITY_SRC.has(c.src)) s += 3; // منابع با تست سلامت داخلی اولویت دارند
   return s;
 }
 function pickForVerify(pool, n) {
@@ -914,7 +944,7 @@ async function main() {
         }
       }
       for (const c of list) {
-        if (lines.length >= 60) break;
+        if (lines.length >= 24) break;
         if (!seenRaw.has(c.raw)) {
           seenRaw.add(c.raw);
           lines.push(c.raw);
@@ -969,11 +999,15 @@ async function main() {
         if (lines.length >= VERIFY_KEEP) break;
       }
     }
+    // فایل اشتراک باید عمدتاً تأییدشده باشد: فقط وقتی تأییدشده کم است چند پشتیبان اضافه می‌کنیم
+    const extrasMax = Math.max(0, UNVERIF_FILL - lines.length);
+    let extras = 0;
     for (const c of list) {
-      if (lines.length >= FILE_CAP) break;
+      if (extras >= extrasMax || lines.length >= FILE_CAP) break;
       if (!seenRaw.has(c.raw)) {
         seenRaw.add(c.raw);
         lines.push(c.raw);
+        extras++;
       }
     }
     if (lines.length) {
