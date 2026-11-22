@@ -117,6 +117,28 @@ https://azad-connect.pages.dev
 
 ---
 
+## کانفیگ‌های رایگان V2Ray (به‌روزرسانی خودکار)
+
+بخش «کانفیگ‌های رایگان» سایت از فایل‌های `public/sub/` تغذیه می‌شود:
+
+- `index.json` — فهرست کشورها و تعداد کانفیگ‌ها
+- `<cc>.txt` — کانفیگ‌های هر کشور (base64) به‌عنوان اشتراک V2RayNG
+- `all.txt` — همه کانفیگ‌ها در یک اشتراک
+
+تولید این فایل‌ها با workflow «**Update free V2Ray configs**» انجام می‌شود
+(`.github/workflows/update-sub.yml`):
+
+- هر ۶ ساعت به‌طور خودکار اجرا می‌شود (و از تب Actions می‌توان دستی اجرا کرد)
+- کانفیگ‌ها را از ۶ منبع عمومی جمع می‌کند، کشور خروجی را با geo-ip تشخیص می‌دهد،
+  کانفیگ‌های مرده را حذف و با هسته Xray خروجی واقعی را تأیید می‌کند
+- نتیجه را در `public/sub/` کامیت می‌کند که خودکار صفحه را دوباره منتشر می‌کند
+
+فایل‌های لازم برای این قابلیت: `scripts/update-sub.mjs`،
+`.github/workflows/update-sub.yml`، `src/components/guide/configs-section.tsx`
+و تغییرات `src/app/page.tsx` و `src/components/guide/nav.tsx`.
+
+---
+
 ## خلاصه فنی (برای توسعه‌دهنده)
 
 - ساخت استاتیک: `npm run build:static` → خروجی در `out/`

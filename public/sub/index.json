@@ -1,0 +1,254 @@
+{
+  "generated": "2026-11-22T00:28:50.677Z",
+  "countries": [
+    {
+      "cc": "TR",
+      "name": "ترکیه",
+      "flag": "🇹🇷",
+      "count": 11,
+      "verified": 0,
+      "file": "tr.txt"
+    },
+    {
+      "cc": "AE",
+      "name": "امارات",
+      "flag": "🇦🇪",
+      "count": 6,
+      "verified": 0,
+      "file": "ae.txt"
+    },
+    {
+      "cc": "AM",
+      "name": "ارمنستان",
+      "flag": "🇦🇲",
+      "count": 1,
+      "verified": 0,
+      "file": "am.txt"
+    },
+    {
+      "cc": "DE",
+      "name": "آلمان",
+      "flag": "🇩🇪",
+      "count": 30,
+      "verified": 1,
+      "file": "de.txt"
+    },
+    {
+      "cc": "NL",
+      "name": "هلند",
+      "flag": "🇳🇱",
+      "count": 30,
+      "verified": 3,
+      "file": "nl.txt"
+    },
+    {
+      "cc": "FI",
+      "name": "فنلاند",
+      "flag": "🇫🇮",
+      "count": 14,
+      "verified": 0,
+      "file": "fi.txt"
+    },
+    {
+      "cc": "SE",
+      "name": "سوئد",
+      "flag": "🇸🇪",
+      "count": 5,
+      "verified": 0,
+      "file": "se.txt"
+    },
+    {
+      "cc": "GB",
+      "name": "بریتانیا",
+      "flag": "🇬🇧",
+      "count": 30,
+      "verified": 3,
+      "file": "gb.txt"
+    },
+    {
+      "cc": "FR",
+      "name": "فرانسه",
+      "flag": "🇫🇷",
+      "count": 30,
+      "verified": 1,
+      "file": "fr.txt"
+    },
+    {
+      "cc": "CH",
+      "name": "سوئیس",
+      "flag": "🇨🇭",
+      "count": 19,
+      "verified": 3,
+      "file": "ch.txt"
+    },
+    {
+      "cc": "AT",
+      "name": "اتریش",
+      "flag": "🇦🇹",
+      "count": 2,
+      "verified": 2,
+      "file": "at.txt"
+    },
+    {
+      "cc": "CZ",
+      "name": "چک",
+      "flag": "🇨🇿",
+      "count": 11,
+      "verified": 0,
+      "file": "cz.txt"
+    },
+    {
+      "cc": "PL",
+      "name": "لهستان",
+      "flag": "🇵🇱",
+      "count": 13,
+      "verified": 0,
+      "file": "pl.txt"
+    },
+    {
+      "cc": "UA",
+      "name": "اوکراین",
+      "flag": "🇺🇦",
+      "count": 1,
+      "verified": 0,
+      "file": "ua.txt"
+    },
+    {
+      "cc": "IT",
+      "name": "ایتالیا",
+      "flag": "🇮🇹",
+      "count": 14,
+      "verified": 3,
+      "file": "it.txt"
+    },
+    {
+      "cc": "ES",
+      "name": "اسپانیا",
+      "flag": "🇪🇸",
+      "count": 21,
+      "verified": 1,
+      "file": "es.txt"
+    },
+    {
+      "cc": "MD",
+      "name": "مولداوی",
+      "flag": "🇲🇩",
+      "count": 1,
+      "verified": 0,
+      "file": "md.txt"
+    },
+    {
+      "cc": "HU",
+      "name": "مجارستان",
+      "flag": "🇭🇺",
+      "count": 1,
+      "verified": 0,
+      "file": "hu.txt"
+    },
+    {
+      "cc": "DK",
+      "name": "دانمارک",
+      "flag": "🇩🇰",
+      "count": 5,
+      "verified": 0,
+      "file": "dk.txt"
+    },
+    {
+      "cc": "NO",
+      "name": "نروژ",
+      "flag": "🇳🇴",
+      "count": 1,
+      "verified": 1,
+      "file": "no.txt"
+    },
+    {
+      "cc": "IE",
+      "name": "ایرلند",
+      "flag": "🇮🇪",
+      "count": 2,
+      "verified": 0,
+      "file": "ie.txt"
+    },
+    {
+      "cc": "US",
+      "name": "آمریکا",
+      "flag": "🇺🇸",
+      "count": 30,
+      "verified": 0,
+      "file": "us.txt"
+    },
+    {
+      "cc": "CA",
+      "name": "کانادا",
+      "flag": "🇨🇦",
+      "count": 30,
+      "verified": 0,
+      "file": "ca.txt"
+    },
+    {
+      "cc": "JP",
+      "name": "ژاپن",
+      "flag": "🇯🇵",
+      "count": 24,
+      "verified": 4,
+      "file": "jp.txt"
+    },
+    {
+      "cc": "SG",
+      "name": "سنگاپور",
+      "flag": "🇸🇬",
+      "count": 30,
+      "verified": 0,
+      "file": "sg.txt"
+    },
+    {
+      "cc": "HK",
+      "name": "هنگ‌کنگ",
+      "flag": "🇭🇰",
+      "count": 30,
+      "verified": 1,
+      "file": "hk.txt"
+    },
+    {
+      "cc": "KR",
+      "name": "کره جنوبی",
+      "flag": "🇰🇷",
+      "count": 16,
+      "verified": 2,
+      "file": "kr.txt"
+    },
+    {
+      "cc": "AU",
+      "name": "استرالیا",
+      "flag": "🇦🇺",
+      "count": 30,
+      "verified": 0,
+      "file": "au.txt"
+    },
+    {
+      "cc": "BR",
+      "name": "برزیل",
+      "flag": "🇧🇷",
+      "count": 1,
+      "verified": 1,
+      "file": "br.txt"
+    },
+    {
+      "cc": "IN",
+      "name": "هند",
+      "flag": "🇮🇳",
+      "count": 5,
+      "verified": 1,
+      "file": "in.txt"
+    },
+    {
+      "cc": "RU",
+      "name": "RU",
+      "flag": "🇷🇺",
+      "count": 13,
+      "verified": 0,
+      "file": "ru.txt"
+    }
+  ],
+  "cdn": null
+}

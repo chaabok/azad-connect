@@ -3,6 +3,7 @@ import { Hero } from "@/components/guide/hero";
 import { Portal } from "@/components/guide/portal";
 import { Advisor } from "@/components/guide/advisor";
 import { ToolCards } from "@/components/guide/tool-cards";
+import { ConfigsSection } from "@/components/guide/configs-section";
 import { StepGuides } from "@/components/guide/step-guides";
 import { DnsSection } from "@/components/guide/dns-section";
 import { SafetySection, FaqSection } from "@/components/guide/safety-faq";
@@ -17,6 +18,7 @@ export default function Home() {
         <Portal />
         <Advisor />
         <ToolCards />
+        <ConfigsSection />
         <StepGuides />
         <DnsSection />
         <SafetySection />
