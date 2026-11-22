@@ -179,7 +179,7 @@ export function ConfigsSection() {
         (a, b) =>
           ccRank(a.country) - ccRank(b.country) ||
           (b.verified ? 1 : 0) - (a.verified ? 1 : 0) ||
-          nullsLast(a.ping) - nullsLast(b.ping)
+          nullsLastAsc(a.ping) - nullsLastAsc(b.ping)
       );
     }
     return sorted;
