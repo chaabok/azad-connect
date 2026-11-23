@@ -9,6 +9,7 @@ import {
   Loader2,
   Clock,
   ShieldAlert,
+  ShieldCheck,
   ListChecks,
   Activity,
   Gauge,
@@ -57,6 +58,7 @@ type RichConfig = {
   host: string;
   port: number;
   verified: boolean;
+  stable?: boolean;
 };
 
 type LatestData = {
@@ -103,7 +105,7 @@ export function ConfigsSection() {
   const [dataError, setDataError] = useState(false);
   const [country, setCountry] = useState<string>("all");
   const [proto, setProto] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<string>("ping");
+  const [sortBy, setSortBy] = useState<string>("stable");
   const [verifiedOnly, setVerifiedOnly] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -164,7 +166,14 @@ export function ConfigsSection() {
     const nullsLastAsc = (v: number | null) => (v === null ? Number.MAX_SAFE_INTEGER : v);
     const nullsLastDesc = (v: number | null) => (v === null ? -1 : v);
     const sorted = [...list];
-    if (sortBy === "ping") {
+    if (sortBy === "stable") {
+      sorted.sort(
+        (a, b) =>
+          (b.stable ? 1 : 0) - (a.stable ? 1 : 0) ||
+          nullsLastAsc(a.ping) - nullsLastAsc(b.ping) ||
+          nullsLastDesc(b.speed) - nullsLastDesc(a.speed)
+      );
+    } else if (sortBy === "ping") {
       sorted.sort(
         (a, b) =>
           nullsLastAsc(a.ping) - nullsLastAsc(b.ping) || ccRank(a.country) - ccRank(b.country)
@@ -405,6 +414,7 @@ export function ConfigsSection() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="stable">پایدارترین (دو بار تست‌شده)</SelectItem>
                       <SelectItem value="ping">کم‌ترین پینگ</SelectItem>
                       <SelectItem value="speed">بیش‌ترین سرعت</SelectItem>
                       <SelectItem value="country">کشور، بعد پینگ</SelectItem>
@@ -437,6 +447,13 @@ export function ConfigsSection() {
                       {filtered.length} کانفیگ در این فهرست — روی دکمه کپی بزنید و در V2RayNG از
                       &laquo;Import config from clipboard&raquo; اضافه کنید
                     </CardDescription>
+                    <p className="mt-2 rounded-md border border-dashed bg-muted/40 px-2.5 py-1.5 text-[11px] leading-5 text-muted-foreground">
+                      نکته درباره پینگ در V2RayNG: عدد&nbsp;
+                      <span dir="ltr" className="font-mono">-1</span>
+                      &nbsp;یعنی آن سرور از داخل ایران در دسترس نیست (IP یا پروتکلش فیلتر شده) —
+                      طبیعی است، برای همه سرورهای عمومی رایگان ممکن است. تست «Real delay» را بزنید،
+                      چند کشور مختلف را امتحان کنید و فقط همان‌ها که جواب دادند را نگه دارید.
+                    </p>
                   </div>
                   <Button
                     type="button"
@@ -507,6 +524,16 @@ export function ConfigsSection() {
                                   className="shrink-0 border-dashed px-1.5 py-0 text-[10px] leading-4 text-muted-foreground"
                                 >
                                   تست‌نشده
+                                </Badge>
+                              )}
+                              {c.stable && (
+                                <Badge
+                                  variant="outline"
+                                  className="shrink-0 gap-1 border-emerald-500/70 bg-emerald-500/10 px-1.5 py-0 text-[10px] leading-4 font-semibold text-emerald-800"
+                                  title="در دو اجرای متوالی با Xray تأیید شده — احتمال کارکرد بیشتر"
+                                >
+                                  <ShieldCheck className="h-2.5 w-2.5" />
+                                  پایدار
                                 </Badge>
                               )}
                               <span

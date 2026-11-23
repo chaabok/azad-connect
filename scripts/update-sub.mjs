@@ -752,6 +752,9 @@ function score(c) {
   if (c.security === "tls") s += 2;
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(c.host)) s += 1; // IP مستقیم
   if (c.src && QUALITY_SRC.has(c.src)) s += 3; // منابع با تست سلامت داخلی اولویت دارند
+  if (PREV_VERIFIED.has(c.raw)) s += 6; // در اجرای قبل تأیید شده — اول تست شود (پرچم پایدار)
+  if (c.proto === "vmess" && c.security === "none" && (c.net || "tcp") === "tcp") s -= 4; // vmess ساده روی tcp در ایران به‌سادگی بلاک می‌شود
+  if (["ws", "grpc", "httpupgrade", "xhttp"].includes(c.net || "")) s += 1; // ترنسپورت‌های مقاوم‌تر در برابر فیلترینگ
   return s;
 }
 function pickForVerify(pool, n) {
@@ -778,6 +781,25 @@ const TCP_FILE = path.join(STATE_DIR, "tcp.json");
 const DONE_FILE = path.join(STATE_DIR, "done.flag");
 const jread = (f) => JSON.parse(fs.readFileSync(f, "utf8"));
 const jwrite = (f, obj) => fs.writeFileSync(f, JSON.stringify(obj));
+
+// فهرست تأییدشده‌های اجرای قبلی — در مخزن ذخیره می‌شود تا بین اجراها/سشن‌ها بماند.
+// کانفیگی که در دو اجرای متوالی تأیید شود پرچم «پایدار» می‌گیرد و در تست بعدی اولویت دارد.
+const PREV_FILE = path.join(ROOT, "public", "configs", "prev-verified.json");
+let PREV_VERIFIED = new Set();
+try {
+  if (fs.existsSync(PREV_FILE)) PREV_VERIFIED = new Set(jread(PREV_FILE).verified || []);
+} catch {}
+// اگر اجرای قبلی کامل شده، این اجرا از صفر شروع می‌شود (فقط اجرای نیمه‌کاره resume می‌شود)
+if (fs.existsSync(DONE_FILE) && process.env.RESUME !== "1") {
+  for (const f of [STATE_FILE, TCP_FILE, DONE_FILE]) {
+    try { fs.rmSync(f, { force: true }); } catch {}
+  }
+  try {
+    fs.rmSync(VERIFY_DIR, { recursive: true, force: true });
+    fs.mkdirSync(VERIFY_DIR, { recursive: true });
+  } catch {}
+  console.log("previous run completed — starting fresh run");
+}
 
 const XRAY_BIN =
   process.env.XRAY_BIN && fs.existsSync(process.env.XRAY_BIN)
@@ -972,6 +994,7 @@ async function main() {
             uri: c.raw, proto: c.proto, net: c.net || "tcp", security: c.security || "none",
             country: cc, org: d.org || "", ping: d.ping, speed: d.speed,
             source: c.src || "", name: c.name || "", host: c.host, port: c.port, verified: true,
+            stable: PREV_VERIFIED.has(c.raw),
           });
         }
       }
@@ -1014,7 +1037,9 @@ async function main() {
       const file = `${key.toLowerCase()}.txt`;
       fs.writeFileSync(path.join(OUT_DIR, file), Buffer.from(lines.join("\n"), "utf8").toString("base64") + "\n");
       index.countries.push({ cc: key, name: CC_FA[key] || key, flag: ccFlag(key), count: lines.length, verified: Math.min(verifiedMap.size, VERIFY_KEEP), file });
-      for (const l of lines) if (allLines.length < ALL_CAP) allLines.push(l);
+      // all.txt فقط شامل تأییدشده‌های هر کشور باشد تا اشتراک تمیز بماند (بازخورد کاربر: اغلب کانفیگ‌ها کار نمی‌کردند)
+      const vCount = Math.min(verifiedMap.size, VERIFY_KEEP);
+      for (const l of lines.slice(0, vCount)) if (allLines.length < ALL_CAP && !allLines.includes(l)) allLines.push(l);
     }
     const verifiedSorted = [...verifiedMap.entries()].sort(byPing).slice(0, VERIFY_KEEP);
     for (const [raw, d] of verifiedSorted) {
@@ -1024,6 +1049,7 @@ async function main() {
         uri: c.raw, proto: c.proto, net: c.net || "tcp", security: c.security || "none",
         country: d.cc || key, org: d.org || "", ping: d.ping, speed: d.speed,
         source: c.src || "", name: c.name || "", host: c.host, port: c.port, verified: true,
+        stable: PREV_VERIFIED.has(raw),
       });
     }
     const poolRaws = new Set(chunk.pool);
@@ -1081,9 +1107,17 @@ async function main() {
   };
   fs.writeFileSync(path.join(RICH_DIR, "latest.json"), JSON.stringify(latest));
 
+  // ذخیره تأییدشده‌های این اجرا برای پرچم «پایدار» در اجرای بعدی
+  try {
+    jwrite(PREV_FILE, {
+      generated: latest.generated,
+      verified: latest.configs.filter((c) => c.verified).map((c) => c.uri),
+    });
+  } catch {}
+
   const allDone = pending.every((item) => fs.existsSync(path.join(VERIFY_DIR, `${item.key}.json`)));
   console.log(
-    `DONE: ${index.countries.length} countries, all=${allLines.length}, rich=${latest.configs.length}, verified=${latest.configs.filter((c) => c.verified).length}, complete=${allDone}`
+    `DONE: ${index.countries.length} countries, all=${allLines.length}, rich=${latest.configs.length}, verified=${latest.configs.filter((c) => c.verified).length}, stable=${latest.configs.filter((c) => c.stable).length}, complete=${allDone}`
   );
   if (allDone) jwrite(DONE_FILE, { at: Date.now() });
 }
