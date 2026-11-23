@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-23T03:50:01.563Z",
+  "generated": "2026-11-23T11:46:19.678Z",
   "countries": [
     {
       "cc": "TR",
@@ -22,7 +22,7 @@
       "name": "آلمان",
       "flag": "🇩🇪",
       "count": 6,
-      "verified": 3,
+      "verified": 2,
       "file": "de.txt"
     },
     {
@@ -38,7 +38,7 @@
       "name": "فنلاند",
       "flag": "🇫🇮",
       "count": 6,
-      "verified": 0,
+      "verified": 1,
       "file": "fi.txt"
     },
     {
@@ -46,7 +46,7 @@
       "name": "سوئد",
       "flag": "🇸🇪",
       "count": 6,
-      "verified": 2,
+      "verified": 1,
       "file": "se.txt"
     },
     {
@@ -77,7 +77,7 @@
       "cc": "AT",
       "name": "اتریش",
       "flag": "🇦🇹",
-      "count": 3,
+      "count": 2,
       "verified": 2,
       "file": "at.txt"
     },
@@ -110,7 +110,7 @@
       "name": "ایتالیا",
       "flag": "🇮🇹",
       "count": 6,
-      "verified": 4,
+      "verified": 3,
       "file": "it.txt"
     },
     {
@@ -118,14 +118,14 @@
       "name": "اسپانیا",
       "flag": "🇪🇸",
       "count": 6,
-      "verified": 4,
+      "verified": 2,
       "file": "es.txt"
     },
     {
       "cc": "RO",
       "name": "رومانی",
       "flag": "🇷🇴",
-      "count": 3,
+      "count": 2,
       "verified": 0,
       "file": "ro.txt"
     },
@@ -141,7 +141,7 @@
       "cc": "MD",
       "name": "مولداوی",
       "flag": "🇲🇩",
-      "count": 2,
+      "count": 1,
       "verified": 0,
       "file": "md.txt"
     },
@@ -158,14 +158,14 @@
       "name": "دانمارک",
       "flag": "🇩🇰",
       "count": 6,
-      "verified": 1,
+      "verified": 0,
       "file": "dk.txt"
     },
     {
       "cc": "NO",
       "name": "نروژ",
       "flag": "🇳🇴",
-      "count": 2,
+      "count": 1,
       "verified": 1,
       "file": "no.txt"
     },
@@ -181,7 +181,7 @@
       "cc": "EE",
       "name": "استونی",
       "flag": "🇪🇪",
-      "count": 6,
+      "count": 4,
       "verified": 0,
       "file": "ee.txt"
     },
@@ -189,15 +189,15 @@
       "cc": "LV",
       "name": "لتونی",
       "flag": "🇱🇻",
-      "count": 4,
-      "verified": 1,
+      "count": 3,
+      "verified": 0,
       "file": "lv.txt"
     },
     {
       "cc": "LT",
       "name": "لیتوانی",
       "flag": "🇱🇹",
-      "count": 4,
+      "count": 5,
       "verified": 0,
       "file": "lt.txt"
     },
@@ -206,7 +206,7 @@
       "name": "آمریکا",
       "flag": "🇺🇸",
       "count": 6,
-      "verified": 2,
+      "verified": 1,
       "file": "us.txt"
     },
     {
@@ -222,7 +222,7 @@
       "name": "ژاپن",
       "flag": "🇯🇵",
       "count": 6,
-      "verified": 4,
+      "verified": 5,
       "file": "jp.txt"
     },
     {
@@ -246,7 +246,7 @@
       "name": "کره جنوبی",
       "flag": "🇰🇷",
       "count": 6,
-      "verified": 2,
+      "verified": 1,
       "file": "kr.txt"
     },
     {
@@ -254,22 +254,22 @@
       "name": "استرالیا",
       "flag": "🇦🇺",
       "count": 6,
-      "verified": 1,
+      "verified": 0,
       "file": "au.txt"
     },
     {
       "cc": "BR",
       "name": "برزیل",
       "flag": "🇧🇷",
-      "count": 4,
-      "verified": 2,
+      "count": 2,
+      "verified": 1,
       "file": "br.txt"
     },
     {
       "cc": "IN",
       "name": "هند",
       "flag": "🇮🇳",
-      "count": 6,
+      "count": 5,
       "verified": 0,
       "file": "in.txt"
     },
@@ -280,6 +280,14 @@
       "count": 2,
       "verified": 2,
       "file": "za.txt"
+    },
+    {
+      "cc": "KW",
+      "name": "کویت",
+      "flag": "🇰🇼",
+      "count": 1,
+      "verified": 0,
+      "file": "kw.txt"
     },
     {
       "cc": "BY",
@@ -317,7 +325,7 @@
       "cc": "TW",
       "name": "تایوان",
       "flag": "🇹🇼",
-      "count": 2,
+      "count": 1,
       "verified": 0,
       "file": "tw.txt"
     },
@@ -325,7 +333,7 @@
       "cc": "VN",
       "name": "ویتنام",
       "flag": "🇻🇳",
-      "count": 2,
+      "count": 5,
       "verified": 0,
       "file": "vn.txt"
     },
@@ -342,16 +350,16 @@
       "name": "تایلند",
       "flag": "🇹🇭",
       "count": 1,
-      "verified": 1,
+      "verified": 0,
       "file": "th.txt"
     },
     {
-      "cc": "MY",
-      "name": "مالزی",
-      "flag": "🇲🇾",
-      "count": 2,
-      "verified": 1,
-      "file": "my.txt"
+      "cc": "PH",
+      "name": "فیلیپین",
+      "flag": "🇵🇭",
+      "count": 1,
+      "verified": 0,
+      "file": "ph.txt"
     },
     {
       "cc": "NE",
@@ -362,44 +370,76 @@
       "file": "ne.txt"
     },
     {
-      "cc": "BE",
-      "name": "بلژیک",
-      "flag": "🇧🇪",
-      "count": 3,
-      "verified": 0,
-      "file": "be.txt"
-    },
-    {
       "cc": "BZ",
       "name": "بلیز",
       "flag": "🇧🇿",
-      "count": 2,
+      "count": 6,
       "verified": 0,
       "file": "bz.txt"
     },
     {
-      "cc": "SK",
-      "name": "اسلواکی",
-      "flag": "🇸🇰",
-      "count": 1,
+      "cc": "CY",
+      "name": "قبرس",
+      "flag": "🇨🇾",
+      "count": 6,
       "verified": 0,
-      "file": "sk.txt"
+      "file": "cy.txt"
     },
     {
-      "cc": "CW",
-      "name": "CW",
-      "flag": "🇨🇼",
+      "cc": "UZ",
+      "name": "ازبکستان",
+      "flag": "🇺🇿",
       "count": 1,
       "verified": 0,
-      "file": "cw.txt"
+      "file": "uz.txt"
+    },
+    {
+      "cc": "MN",
+      "name": "مغولستان",
+      "flag": "🇲🇳",
+      "count": 1,
+      "verified": 0,
+      "file": "mn.txt"
+    },
+    {
+      "cc": "KG",
+      "name": "قرقیزستان",
+      "flag": "🇰🇬",
+      "count": 1,
+      "verified": 0,
+      "file": "kg.txt"
+    },
+    {
+      "cc": "BE",
+      "name": "بلژیک",
+      "flag": "🇧🇪",
+      "count": 2,
+      "verified": 0,
+      "file": "be.txt"
     },
     {
       "cc": "LU",
       "name": "لوکزامبورگ",
       "flag": "🇱🇺",
-      "count": 2,
+      "count": 1,
       "verified": 0,
       "file": "lu.txt"
+    },
+    {
+      "cc": "IM",
+      "name": "جزیره من",
+      "flag": "🇮🇲",
+      "count": 1,
+      "verified": 0,
+      "file": "im.txt"
+    },
+    {
+      "cc": "VG",
+      "name": "جزایر ویرجین",
+      "flag": "🇻🇬",
+      "count": 2,
+      "verified": 0,
+      "file": "vg.txt"
     },
     {
       "cc": "PA",
@@ -408,14 +448,6 @@
       "count": 1,
       "verified": 0,
       "file": "pa.txt"
-    },
-    {
-      "cc": "SC",
-      "name": "سیشل",
-      "flag": "🇸🇨",
-      "count": 2,
-      "verified": 0,
-      "file": "sc.txt"
     }
   ],
   "cdn": {
